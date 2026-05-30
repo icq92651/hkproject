@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>房務戰情分析系統 V165 - 故障房與領班版</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.37.11/build/docxtemplater.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+    <style id="print-page-style"></style>
+    <style>
+        :root {
+            --blue: #3498db; --yellow: #f1c40f; --red: #e74c3c;
+            --green: #2ecc71; --gray: #bdc3c7; --dark: #2c3e50;
+            --teal: #1abc9c; 
+        }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: #f4f7f6; padding: 10px 20px; margin: 0; }
+        
+        .header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .toggle-btn { background: #bdc3c7; color: #333; border: none; padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: 0.2s; }
+        .toggle-btn:hover { background: #95a5a6; }
+        
+        .setup-panel { background: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 10px; border-top: 6px solid var(--dark); transition: max-height 0.3s ease-out; overflow: hidden; }
+        .setup-panel.collapsed { display: none; } 
+
+        .input-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+        .input-item { flex: 1; min-width: 150px; }
+        label { font-weight: bold; display: block; margin-bottom: 4px; color: var(--dark); font-size: 13px; }
+        input, select, textarea { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px; }
+        textarea { height: 32px; resize: vertical; overflow-y: auto; font-family: monospace; }
+
+        .manpower-panel { background: #e8f4f8; padding: 10px; border-radius: 6px; border: 1px solid #bce0ee; margin-bottom: 10px; }
+        .command-panel { background: #fff3e0; border: 1px solid #ffe0b2; padding: 10px; border-radius: 6px; margin-bottom: 10px; }
+        
+        .btn-group { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
+        .btn-run { flex: 1; min-width: 120px; background: var(--dark); color: white; border: none; padding: 10px; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-run:hover { background: #34495e; }
+        .btn-detail { flex: 1; min-width: 120px; background: #3498db; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; transition: 0.2s; display: none; }
+        .btn-detail:hover { background: #2980b9; }
+        .btn-print { flex: 1; min-width: 120px; background: #27ae60; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; transition: 0.2s; display: none; }
+        .btn-print:hover { background: #2ecc71; }
+        .btn-print-hk { flex: 1; min-width: 120px; background: #8e44ad; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; transition: 0.2s; display: none; }
+        .btn-print-hk:hover { background: #732d91; }
+        .btn-cmd { background: #d35400; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+        .btn-share { background: #8e44ad; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; white-space: nowrap; transition: 0.2s; }
+
+        .dashboard { display: none; margin-top: 10px; }
+        .summary-card { display: flex; flex-wrap: wrap; gap: 6px; background: white; padding: 10px; border-radius: 8px; margin-bottom: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-box { flex: 1; min-width: 70px; padding: 5px; border-radius: 6px; background: #f8f9fa; border: 1px solid #ddd; font-size: 11px; font-weight: bold; }
+        .stat-value { display: block; font-size: 18px; font-weight: bold; color: var(--dark); margin-top: 2px; }
+
+        .hk-summary-panel { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; padding: 5px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .hk-workload-card { flex: 1; min-width: 180px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 8px; box-sizing: border-box;}
+        .hk-workload-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: var(--dark); }
+        .hk-workload-pts { color: var(--blue); }
+        .hk-progress-bg { width: 100%; height: 8px; background-color: #e0e0e0; border-radius: 4px; overflow: hidden; }
+        .hk-progress-bar { height: 100%; border-radius: 4px; transition: width 0.3s ease, background-color 0.3s ease; }
+
+        .floor-card { background: white; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .floor-header { font-size: 16px; font-weight: bold; margin-bottom: 6px; display: flex; justify-content: space-between; border-left: 5px solid var(--dark); padding-left: 8px; align-items: center; }
+        .floor-header small { color: #666; font-weight: normal; font-size: 12px; }
+        
+        .room-grid { display: grid; grid-template-columns: repeat(18, 1fr); gap: 5px; }
+        .room { height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: white; position: relative; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; user-select: none; transition: transform 0.1s; }
+        .room:active { transform: scale(0.95); }
+        
+        .pts-badge { position: absolute; top: -4px; right: -4px; background: white; color: #333; font-size: 9px; padding: 1px 4px; border-radius: 8px; border: 1px solid #ccc; box-shadow: 0 1px 2px rgba(0,0,0,0.1); z-index: 3; }
+        .hk-badge { position: absolute; bottom: -4px; left: -4px; background: #2c3e50; color: #f1c40f; font-size: 10px; padding: 1px 5px; border-radius: 8px; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.3); z-index: 4; cursor: pointer; transition: 0.2s; }
+        .hk-badge:hover { background: #e74c3c; color: white; }
+
+        .full-badge { position: absolute; top: -4px; left: -4px; background: #e74c3c; color: white; font-size: 9px; padding: 1px 4px; border-radius: 8px; font-weight: bold; border: 1px solid white; z-index: 2; }
+        .clean-badge { position: absolute; top: -4px; left: -4px; background: #2ecc71; color: white; font-size: 9px; padding: 1px 4px; border-radius: 8px; font-weight: bold; border: 1px solid white; z-index: 2; }
+
+        .blue { background-color: var(--blue) !important; color: white !important; }
+        .yellow { background-color: var(--yellow) !important; color: #333 !important; }
+        .yellow-full { background-color: var(--yellow) !important; color: #333 !important; }
+        .red { background-color: var(--red) !important; color: white !important; }
+        .green { background-color: var(--green) !important; color: white !important; }
+        .teal { background-color: var(--teal) !important; color: white !important; }
+        .gray { background-color: var(--gray) !important; color: white !important; opacity: 0.6; }
+        .blue-red { background: linear-gradient(to bottom, var(--blue) 50%, var(--red) 50%) !important; color: white !important; }
+        .ooo-to-in { background: linear-gradient(to bottom, var(--green) 50%, var(--red) 50%) !important; color: white !important; }
+        .green-red { background: linear-gradient(to bottom, var(--green) 50%, var(--red) 50%) !important; color: white !important; }
+
+        .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 998; display: none; }
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; width: 90%; max-width: 650px; max-height: 85vh; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 999; display: none; flex-direction: column; }
+        .modal-header { padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: var(--dark); color: white; border-radius: 12px 12px 0 0; }
+        .modal-header h2 { margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        .modal-close { background: transparent; border: none; color: white; font-size: 20px; cursor: pointer; transition: 0.2s; }
+        .modal-close:hover { color: #e74c3c; }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; background: #f9f9f9; border-radius: 0 0 12px 12px; }
+
+        #print-area { display: none; }
+
+        .lock-btn-container {
+            display: flex; align-items: center; gap: 5px; background: #fff; padding: 4px 8px;
+            border-radius: 4px; border: 1px solid #ccc; cursor: pointer; user-select: none;
+            transition: 0.2s;
+        }
+        .lock-btn-container:hover { background: #f1f2f6; }
+
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            .header-container, .setup-panel, .command-panel, .manpower-panel, .btn-group, #dashboard, .modal-backdrop, .modal { display: none !important; }
+            body { background: white; padding: 0; margin: 0; }
+            #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+            .print-title { font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 10px; color: black; }
+            .print-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; table-layout: fixed; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 4px 2px; color: black !important; }
+            .print-table tr.data-row td { height: 35px; font-weight: bold; }
+            .print-table tr.blank-row td { height: 25px; border-top: none; font-weight: bold; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header-container">
+    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V165 <small style="font-size:12px;color:#8e44ad;">(故障房細化與領班版 📊)</small></h1>
+    <button class="toggle-btn" onclick="toggleSetupPanel()" id="toggleBtn">隱藏設定區</button>
+</div>
+
+<div class="setup-panel" id="setupPanel">
+    <div class="input-row">
+        <div class="input-item"><label>1. 多日報表 (CSV)</label><input type="file" id="csvMain" accept=".csv"></div>
+        <div class="input-item" style="flex: 0.5;"><label>編碼</label><select id="encoding"><option value="big5">Big5</option><option value="utf-8">UTF-8</option></select></div>
+        <div class="input-item"><label>2. 續住表 (CSV)</label><input type="file" id="csvStay" accept=".csv"></div>
+        <div class="input-item" style="background:#f4ebf9; padding:5px; border-radius:4px; border:1px solid #d2b4de;">
+            <label style="color:#8e44ad;">⭐ 3. 上傳 Word 範本 (.docx)</label>
+            <input type="file" id="docxTemplate" accept=".docx" style="background:white;">
+        </div>
+    </div>
+    
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div class="manpower-panel" style="flex: 2; margin-bottom: 0;">
+            <div class="input-row" style="margin:0">
+                <div class="input-item"><label>正職人數/基準</label><div style="display:flex;gap:5px"><input type="number" id="ftCount" value="0" oninput="updateSummary()"><input type="number" id="ftPts" value="16" oninput="updateSummary()"></div></div>
+                <div class="input-item"><label>PT人數/基準</label><div style="display:flex;gap:5px"><input type="number" id="ptCount" value="0" oninput="updateSummary()"><input type="number" id="ptPts" value="12" oninput="updateSummary()"></div></div>
+                <div class="input-item"><label>領班人數/基準</label><div style="display:flex;gap:5px"><input type="number" id="supCount" value="0" oninput="updateSummary()"><input type="number" id="supPts" value="16" oninput="updateSummary()"></div></div>
+                <div class="input-item" style="flex: 0.8; display: flex; flex-direction: column; justify-content: flex-end;">
+                    <label class="lock-btn-container" title="打勾時：改K退房數不變。取消打勾：改K退房數減少。">
+                        <input type="checkbox" id="lockKOutBtn" onchange="updateSummary()" style="width:16px; height:16px; margin:0;" checked>
+                        <span style="font-size: 12px; color: var(--dark); font-weight: bold;">🔒 鎖定K退房數</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="command-panel" style="flex: 1.5; margin-bottom: 0;">
+            <p style="font-size:12px; color:#555; margin-top:0; margin-bottom:4px;">
+                ⚡ 房況：<b>c</b>, <b>s</b>, <b>f</b>, <b>l</b>, <b style="color:#1abc9c;">k</b>, <b>ci</b>, <b>oi</b>, <b>li</b>, <b>i</b> | 派房：<code>@號碼</code> | 🧹 <b>清除</b>：<code>clean all</code>
+            </p>
+            <div style="display:flex; gap:10px; align-items: flex-start;">
+                <textarea id="cmdInput" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();executeCommands();}" placeholder="指令輸入... (例: 520~BT*1)"></textarea>
+                <button class="btn-cmd" style="height:32px;" onclick="executeCommands()">執行</button>
+                <button class="btn-share" style="height:32px;" onclick="exportState()">🔗 複製</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-run" onclick="analyze()">1. 啟動戰情分析</button>
+        <button id="btnDetail" class="btn-detail" onclick="showHkDetails()">📋 2. 派房明細總覽</button>
+        <button id="printBtn" class="btn-print" onclick="window.print()">🖨️ 3. 列印 Excel 總表</button>
+        <button id="printHkBtn" class="btn-print-hk" onclick="exportDocx()">📥 4. 一鍵打包下載 Word</button>
+    </div>
+</div>
+
+<div id="dashboard" class="dashboard">
+    <div class="summary-card">
+        <div class="stat-box" style="background:#e8ecef;">今日日期<span class="stat-value" id="statTodayDate" style="color:#2c3e50; font-size:15px;"></span></div>
+        <div class="stat-box" style="background:#f4ebf9; border-color:#d2b4de;">總房間數<span class="stat-value" id="statTotalRooms" style="color:#8e44ad;">0</span></div>
+        <div class="stat-box">退房<span class="stat-value" id="statOut" style="color:var(--blue)">0</span></div>
+        <div class="stat-box">續住(含全)<span class="stat-value" id="statStay" style="color:var(--yellow)">0</span></div>
+        <div class="stat-box" style="background:#fdedec;">入住房數<span class="stat-value" id="statInCount" style="color:#c0392b;">0</span></div>
+        <div class="stat-box" style="background:#eaf2f8;">總點數<span class="stat-value" id="statLoadPts" style="color:#2980b9;">0</span></div>
+        <div class="stat-box">總人力點數<span class="stat-value" id="statManpowerPts">0</span></div>
+        <div class="stat-box" style="background:#fff3cd;">今日留房缺額<span class="stat-value" id="statDiffPts" style="font-size:15px; font-weight:900;">0</span></div>
+    </div>
+    
+    <div id="hkSummary" class="hk-summary-panel"></div>
+    <div id="output"></div>
+</div>
+
+<div id="print-area">
+    <div class="print-title">房務排房總表 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 日期：<span id="printDate"></span></div>
+    <div id="print-table-container"></div>
+</div>
+
+<div id="hkModalBackdrop" class="modal-backdrop" onclick="closeHkDetails()"></div>
+<div id="hkModal" class="modal">
+    <div class="modal-header">
+        <h2>📋 房務人員派房明細總覽</h2>
+        <button class="modal-close" onclick="closeHkDetails()">✖</button>
+    </div>
+    <div class="modal-body" id="hkModalContent"></div>
+</div>
+
+<script>
+function toggleSetupPanel() {
+    const panel = document.getElementById('setupPanel');
+    const btn = document.getElementById('toggleBtn');
+    if (panel.classList.contains('collapsed')) {
+        panel.classList.remove('collapsed');
+        btn.innerText = '隱藏設定區';
+    } else {
+        panel.classList.add('collapsed');
+        btn.innerText = '展開設定區';
+    }
+}
+
+let globalRoomMap = {};
+const globalFloors = [13, 12, 11, 10, 9, 8, 7, 6, 5, 3, 2];
+const ROOM_PTS = {'1303':5,'1308':3,'1209':3,'1205':3,'1301':2,'1302':2,'1305':2,'1306':2,'1307':2,'1201':2,'1202':2,'1203':2,'1206':2,'1207':2,'1208':2};
+
+function getPts(rid) { return ROOM_PTS[rid] || (parseInt(rid)>=1200?2.0:1.0); }
+
+function getBaseSt(r) {
+    return (r.status === 'teal') ? r.underlyingStatus : r.status;
+}
+
+function isCountable(r) {
+    let st = getBaseSt(r);
+    return ['blue','blue-red','yellow','yellow-full','green','ooo-to-in','green-red'].includes(st);
+}
+
+function getEffPts(r) {
+    let st = getBaseSt(r);
+    return st === 'yellow' ? r.pts / 2 : r.pts;
+}
+
+function hkRoomSort(a, b) {
+    let stA = getBaseSt(a);
+    let stB = getBaseSt(b);
+    let isArrivalA = (stA === 'red');
+    let isArrivalB = (stB === 'red');
+    if (isArrivalA && !isArrivalB) return 1;  
+    if (!isArrivalA && isArrivalB) return -1; 
+    return parseInt(a.id) - parseInt(b.id);   
+}
+
+const cleanStr = (s) => s ? s.toString().trim() : '';
+const normId = (s) => s ? s.toString().trim().replace(/\s/g, '').replace(/^0+/, '') : ''; 
+
+const isOOO = (v) => { 
+    let s = cleanStr(v).toUpperCase(); 
+    return s.includes('故障') || s.includes('維修') || s.includes('鎖') || s.includes('OOO'); 
+};
+const isBlank = (v) => { 
+    let s = cleanStr(v).toUpperCase(); 
+    return s==='' || s==='NAN' || s==='-' || s==='VAC' || s==='空房'; 
+};
+const isName = (v) => !isOOO(v) && !isBlank(v);
+
+function parseDateRobust(dateStr) {
+    if(!dateStr) return null;
+    let base = dateStr.trim().split(' ')[0]; 
+    let m = base.match(/(\d+)[-/](\d+)[-/](\d+)/);
+    if(m) {
+        let y = parseInt(m[1], 10);
+        if(y < 200) y += 1911; 
+        return new Date(y, parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    }
+    return new Date(base);
+}
+
+async function analyze() {
+    const mainF = document.getElementById('csvMain').files[0];
+    const stayF = document.getElementById('csvStay').files[0];
+    const enc = document.getElementById('encoding').value;
+    if(!mainF || !stayF) return alert("請上傳兩個 CSV 檔案");
+
+    const mainT = await new Promise(r => { const rd=new FileReader(); rd.onload=e=>r(new TextDecoder(enc).decode(e.target.result)); rd.readAsArrayBuffer(mainF); });
+    const stayT = await new Promise(r => { const rd=new FileReader(); rd.onload=e=>r(new TextDecoder(enc).decode(e.target.result)); rd.readAsArrayBuffer(stayF); });
+
+    const todayDate = new Date();
+    todayDate.setHours(0,0,0,0);
+
+    const stayLines = stayT.split(/\r?\n/);
+    const staySet = new Set();
+    const fullChangeSet = new Set();
+
+    stayLines.forEach((line, index) => {
+        if(index === 0) return;
+        let cols = line.split(',');
+        if(cols.length <= 8) return;
+        let rid = normId(cols[0]);
+        let arrivalStr = cleanStr(cols[7]); 
+        let departStr = cleanStr(cols[8]);  
+        if(rid) {
+            staySet.add(rid);
+            if(line.includes('全')) { fullChangeSet.add(rid); } 
+            else {
+                const arrDate = parseDateRobust(arrivalStr);
+                const depDate = parseDateRobust(departStr);
+                if(arrDate && !isNaN(arrDate.getTime())) {
+                    arrDate.setHours(0,0,0,0);
+                    const diffTime = todayDate.getTime() - arrDate.getTime();
+                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                    let isDepToday = false;
+                    if(depDate && !isNaN(depDate.getTime())) {
+                        depDate.setHours(0,0,0,0);
+                        isDepToday = (todayDate.getTime() === depDate.getTime());
+                    }
+                    if(diffDays > 0 && diffDays % 2 === 0 && !isDepToday) { fullChangeSet.add(rid); }
+                }
+            }
+        }
+    });
+
+    globalRoomMap = {};
+    globalFloors.forEach(f => {
+        let max = (f >= 12) ? 9 : (f === 2 ? 17 : 20);
+        for(let i=1; i<=max; i++) {
+            let id = f + (i < 10 ? '0'+i : ''+i);
+            if(i===4 || i===14 || ['1304','1204','1309'].includes(id)) continue;
+            globalRoomMap[id] = { id, f, pts: getPts(id), status: 'gray', underlyingStatus: 'gray', hk: '', isFull: false, remark: '' };
+        }
+    });
+
+    const rows = mainT.split(/\r?\n/).map(r => r.split(',').map(c => cleanStr(c)));
+    for (let i = 3; i < rows.length; i++) {
+        let row = rows[i]; if (!row || row.length < 5) continue;
+        let id = normId(row[0]);
+        if (globalRoomMap[id]) {
+            let v1 = row[3], v2 = row[4];
+            let initialSt = 'gray';
+
+            // 【故障房新邏輯】
+            if(isOOO(v1)) {
+                if (isOOO(v2)) initialSt = 'gray';     // 故障房連續兩天故障房標記為G
+                else if (isName(v2)) initialSt = 'ooo-to-in'; // 故障轉入住
+                else if (isBlank(v2)) initialSt = 'green';  // 故障房轉空房標記為L (程式中green對應L)
+                else initialSt = 'gray';
+            }
+            else if(isName(v1)) {
+                if(staySet.has(id)) {
+                    initialSt = fullChangeSet.has(id) ? 'yellow-full' : 'yellow';
+                    globalRoomMap[id].isFull = fullChangeSet.has(id);
+                } else { initialSt = isName(v2) ? 'blue-red' : 'blue'; }
+            }
+            else {
+                if(staySet.has(id)) {
+                    initialSt = fullChangeSet.has(id) ? 'yellow-full' : 'yellow';
+                    globalRoomMap[id].isFull = fullChangeSet.has(id);
+                } else { initialSt = isName(v2) ? 'red' : 'gray'; }
+            }
+            globalRoomMap[id].status = initialSt;
+            globalRoomMap[id].underlyingStatus = initialSt; 
+        }
+    }
+    
+    let days = ['日', '一', '二', '三', '四', '五', '六'];
+    document.getElementById('statTodayDate').innerText = `${todayDate.getMonth()+1}/${todayDate.getDate()} (週${days[todayDate.getDay()]})`;
+    document.getElementById('printDate').innerText = `${todayDate.getFullYear()}/${todayDate.getMonth()+1}/${todayDate.getDate()}`;
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('printBtn').style.display = 'block';
+    document.getElementById('btnDetail').style.display = 'block'; 
+    document.getElementById('printHkBtn').style.display = 'block'; 
+    executeCommands(); 
+    renderRooms();
+}
+
+function executeCommands() {
+    const input = document.getElementById('cmdInput');
+    const text = input.value;
+    if (!text.trim() || Object.keys(globalRoomMap).length === 0) return;
+    const tokens = text.replace(/[\r\n,]+/g, ' ').trim().split(/\s+/);
+    let currentRooms = []; let st = ''; let hk = null;
+    const applyGroup = () => {
+        if(currentRooms.length === 0) return;
+        currentRooms.forEach(rt => {
+            const apply = (rid) => { 
+                if(globalRoomMap[rid]) { 
+                    if(st) {
+                        globalRoomMap[rid].status = st; 
+                        if(st !== 'teal') { globalRoomMap[rid].underlyingStatus = st; }
+                        if(st === 'yellow-full') globalRoomMap[rid].isFull = true;
+                    }
+                    if(hk !== null) globalRoomMap[rid].hk = hk; 
+                } 
+            };
+            if(rt.includes('-')){ const [s,e]=rt.split('-').map(Number); for(let r=s;r<=e;r++) apply(r.toString()); } else apply(normId(rt));
+        });
+        currentRooms = []; st = ''; hk = null;
+    };
+    for (let idx = 0; idx < tokens.length; idx++) {
+        let tk = tokens[idx];
+        let tkLower = tk.toLowerCase();
+        if (tkLower === 'clean') {
+            if (idx + 1 < tokens.length) {
+                let nextTk = tokens[idx + 1].toLowerCase();
+                if (nextTk === 'all') { Object.values(globalRoomMap).forEach(r => r.hk = ''); } 
+                else {
+                    let target = nextTk.startsWith('@') ? nextTk.substring(1) : nextTk;
+                    Object.values(globalRoomMap).forEach(r => { if (r.hk === target) r.hk = ''; });
+                }
+                idx++; continue;
+            }
+        }
+        if (tkLower.startsWith('ft=')) { document.getElementById('ftCount').value = tkLower.split('=')[1]; continue; }
+        if (tkLower.startsWith('ftp=')) { document.getElementById('ftPts').value = tkLower.split('=')[1]; continue; }
+        if (tkLower.startsWith('pt=')) { document.getElementById('ptCount').value = tkLower.split('=')[1]; continue; }
+        if (tkLower.startsWith('ptp=')) { document.getElementById('ptPts').value = tkLower.split('=')[1]; continue; }
+        if (tkLower.startsWith('sup=')) { document.getElementById('supCount').value = tkLower.split('=')[1]; continue; }
+        if (tkLower.startsWith('supp=')) { document.getElementById('supPts').value = tkLower.split('=')[1]; continue; }
+        
+        if (tk.includes('~')) {
+            let parts = tk.split('~');
+            let rmPart = parts[0];
+            let notePart = parts.slice(1).join('~');
+            const applyNote = (rid) => { if(globalRoomMap[rid]) { globalRoomMap[rid].remark = notePart; } };
+            if(rmPart.includes('-')) {
+                const [s, e] = rmPart.split('-').map(Number);
+                for(let r=s; r<=e; r++) applyNote(r.toString());
+            } else { applyNote(normId(rmPart)); }
+            continue;
+        }
+        let isRm = /^\d+-\d+$/.test(tk) || /^\d+$/.test(tk);
+        let isSt = ['c','s','f','全','l','k','ci','li','i','g','oi'].includes(tkLower);
+        let isH = tkLower.startsWith('@') || /^h\d+$/.test(tkLower);
+        if(isRm) { if(currentRooms.length > 0 && (st !=='' || hk !== null)) applyGroup(); currentRooms.push(tk); }
+        else if(isSt) { 
+            if(tkLower==='c') st='blue'; else if(tkLower==='s') st='yellow'; else if(tkLower==='f'||tkLower==='全') st='yellow-full';
+            else if(tkLower==='l') st='green'; else if(tkLower==='k') st='teal'; else if(tkLower==='ci') st='blue-red'; else if(tkLower==='i') st='red'; else if(tkLower==='g') st='gray'; else if(tkLower==='oi') st='ooo-to-in'; else if(tkLower==='li') st='green-red';
+        } else if(isH) {
+            let hVal = tkLower.startsWith('@') ? tkLower.substring(1) : tkLower.substring(1);
+            hk = (hVal === '0' || hVal === '-') ? '' : hVal;
+        }
+    }
+    applyGroup(); input.value = ''; renderRooms();
+}
+
+function exportState() {
+    if(Object.keys(globalRoomMap).length === 0) return alert("請先啟動分析！");
+    let groups = {};
+    let remarks = []; 
+    Object.values(globalRoomMap).forEach(r => {
+        let key = r.status + '|' + (r.hk || '');
+        if(!groups[key]) groups[key] = [];
+        groups[key].push(parseInt(r.id));
+        if(r.remark) { remarks.push(`${r.id}~${r.remark}`); }
+    });
+    const statusMap = { 'blue':'c','yellow':'s','yellow-full':'f','red':'i','blue-red':'ci','green':'l', 'teal':'k', 'gray':'g', 'ooo-to-in':'oi', 'green-red':'li' };
+    let lines = [];
+    let ft = document.getElementById('ftCount').value || 0; let ftp = document.getElementById('ftPts').value || 0;
+    let pt = document.getElementById('ptCount').value || 0; let ptp = document.getElementById('ptPts').value || 0;
+    let sup = document.getElementById('supCount').value || 0; let supp = document.getElementById('supPts').value || 0;
+    lines.push(`ft=${ft} ftp=${ftp} pt=${pt} ptp=${ptp} sup=${sup} supp=${supp}`);
+    for(let key in groups) {
+        let [st, hk] = key.split('|');
+        let rooms = groups[key].sort((a,b)=>a-b);
+        let grouped = []; let start=rooms[0], prev=rooms[0];
+        for(let i=1;i<rooms.length;i++){ if(rooms[i]===prev+1) prev=rooms[i]; else { grouped.push(start===prev?start:`${start}-${prev}`); start=rooms[i]; prev=rooms[i]; } }
+        grouped.push(start===prev?start:`${start}-${prev}`);
+        lines.push(`${grouped.join(' ')} ${statusMap[st]} ${hk?`@${hk}`:''}`.trim());
+    }
+    if(remarks.length > 0) { lines.push(remarks.join(' ')); }
+    navigator.clipboard.writeText(lines.join('\n')).then(()=>alert("✅ 代碼已複製！")).catch(()=>prompt("請複製指令：", lines.join('\n')));
+}
+
+function toggleStatus(id) {
+    if(!globalRoomMap[id]) return;
+    const cy = ['blue','yellow','yellow-full','red','blue-red','green','teal','green-red','ooo-to-in','gray'];
+    let nextSt = cy[(cy.indexOf(globalRoomMap[id].status)+1)%cy.length];
+    globalRoomMap[id].status = nextSt;
+    if(nextSt !== 'teal') { globalRoomMap[id].underlyingStatus = nextSt; }
+    globalRoomMap[id].isFull = (nextSt === 'yellow-full');
+    renderRooms();
+}
+
+function removeHk(id) {
+    if(!globalRoomMap[id]) return;
+    globalRoomMap[id].hk = '';
+    renderRooms();
+}
+
+function showHkDetails() {
+    const modal = document.getElementById('hkModal');
+    const backdrop = document.getElementById('hkModalBackdrop');
+    const content = document.getElementById('hkModalContent');
+    let hkMap = {};
+    Object.values(globalRoomMap).forEach(r => { if (r.hk) { if (!hkMap[r.hk]) hkMap[r.hk] = []; hkMap[r.hk].push(r); } });
+    const statusNames = { 'blue': '退房', 'yellow': '續住', 'yellow-full': '全換', 'red': '入住', 'blue-red': '退入', 'green': '留-掃', 'teal': '今留', 'gray': '空/故', 'ooo-to-in': '修轉入', 'green-red':'留轉入' };
+    const statusColors = { 'blue': '#3498db', 'yellow': '#f1c40f', 'yellow-full': '#f1c40f', 'red': '#e74c3c', 'blue-red': 'linear-gradient(to bottom, #3498db 50%, #e74c3c 50%)', 'green': '#2ecc71', 'teal': '#1abc9c', 'gray': '#bdc3c7', 'ooo-to-in': 'linear-gradient(to bottom, #2ecc71 50%, #e74c3c 50%)', 'green-red':'linear-gradient(to bottom, #2ecc71 50%, #e74c3c 50%)' };
+    
+    if (Object.keys(hkMap).length === 0) content.innerHTML = '<div style="text-align:center; padding: 30px;">目前沒有指派任何房間。</div>';
+    else {
+        let html = '';
+        Object.keys(hkMap).sort((a,b) => parseInt(a) - parseInt(b)).forEach(hk => {
+            let rooms = hkMap[hk].sort(hkRoomSort);
+            let totalPts = rooms.reduce((sum, r) => isCountable(r) ? sum + getEffPts(r) : sum, 0);
+            html += `<div style="margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white;">
+                        <div style="background: #2c3e50; color: #f1c40f; padding: 10px 15px; font-weight: bold;">👷 房務員：${hk} 號 (共 ${rooms.length} 間 / ${totalPts} 點)</div>
+                        <div style="padding: 10px; display: flex; flex-wrap: wrap; gap: 8px;">`;
+            rooms.forEach(r => {
+                let stName = statusNames[r.status] || r.status;
+                let stBg = statusColors[r.status] || '#ccc';
+                let txtColor = (r.status.includes('yellow')) ? '#333' : 'white';
+                let remarkHTML = r.remark ? `<span style="font-size:10px; color:#e74c3c; margin-left:4px;">(${r.remark})</span>` : '';
+                let roomPtDisp = isCountable(r) ? getEffPts(r) : 0;
+                html += `<div style="border: 1px solid #eee; border-radius: 6px; padding: 5px 10px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            <strong>${r.id}</strong>
+                            <span style="display:inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight:bold; background:${stBg}; color:${txtColor};">${stName}</span>
+                            <span>${roomPtDisp}點</span>${remarkHTML}
+                         </div>`;
+            });
+            html += `</div></div>`;
+        });
+        content.innerHTML = html;
+    }
+    modal.style.display = 'flex'; backdrop.style.display = 'block';
+}
+
+function closeHkDetails() { document.getElementById('hkModal').style.display = 'none'; document.getElementById('hkModalBackdrop').style.display = 'none'; }
+
+function renderRooms() {
+    const out = document.getElementById('output'); out.innerHTML = '';
+    const printContainer = document.getElementById('print-table-container'); 
+    let printHtml = '<table class="print-table"><colgroup><col style="width:50px;">'; 
+    for(let i=0; i<18; i++) printHtml += '<col style="width:auto;">'; 
+    printHtml += '<col style="width:90px;"></colgroup>'; 
+    
+    globalFloors.forEach(f => {
+        const fRooms = Object.values(globalRoomMap).filter(r => r.f === f).sort((a,b) => a.id-b.id);
+        const fTotalCount = fRooms.filter(r => isCountable(r)).length;
+        const fTotalPts = fRooms.reduce((s, r) => isCountable(r) ? s + getEffPts(r) : s, 0);
+        let h = `<div class="floor-card"><div class="floor-header"><span>${f}F</span><small>(${fTotalCount}間 / ${fTotalPts}點)</small></div><div class="room-grid">`;
+        fRooms.forEach(r => {
+            let colspan = Math.round(r.pts); 
+            let p = '';
+            if (isCountable(r)) { p = `<div class="pts-badge" style="${(r.status==='green'&&r.hk==='')?'background:#e8f8f5; color:#2ecc71;':''}">${getEffPts(r)}</div>`; }
+            let hkBadge = r.hk ? `<div class="hk-badge" title="點擊即可刪除人員" onclick="event.stopPropagation(); removeHk('${r.id}')">${r.hk}</div>` : '';
+            let fullText = r.remark ? '📝' : '全'; 
+            let fullBadge = (r.status === 'yellow-full' || r.isFull || r.remark) ? `<div class="full-badge" title="${r.remark || '全換'}">${fullText}</div>` : '';
+            let cleanBadge = (r.status === 'green' && r.hk !== '') ? `<div class="clean-badge">掃</div>` : '';
+            h += `<div class="room ${r.status}" style="grid-column: span ${colspan};" onclick="toggleStatus('${r.id}')">${r.id}${p}${hkBadge}${fullBadge}${cleanBadge}</div>`;
+        });
+        out.innerHTML += h + `</div></div>`;
+        printHtml += `<tr class="data-row"><td class="col-floor" rowspan="2">${f}F</td>`;
+        let curPts = 0;
+        fRooms.forEach(r => { 
+            let span = Math.round(r.pts); curPts += span;
+            let lbl = '';
+            if(r.remark) lbl = `(${r.remark})`;
+            else if (r.status === 'yellow-full' || r.isFull) lbl = '(全)';
+            else if (r.status === 'green' && r.hk !== '') lbl = '(留-掃)';
+            printHtml += `<td class="room-print" colspan="${span}">${r.id} <span style="font-size:8px;">${lbl}</span></td>`; 
+        });
+        for(let i=curPts; i<18; i++) printHtml += `<td></td>`;
+        printHtml += `<td rowspan="2">房務員</td></tr><tr class="blank-row">`;
+        curPts = 0;
+        fRooms.forEach(r => { let span = Math.round(r.pts); curPts += span; printHtml += `<td colspan="${span}">${r.hk}</td>`; });
+        for(let i=curPts; i<18; i++) printHtml += `<td></td>`;
+        printHtml += `</tr>`;
+    });
+    printContainer.innerHTML = printHtml + '</table>';
+    updateSummary();
+}
+
+function updateSummary() {
+    let out=0, stay=0, inCount=0, cleanPts=0, greenPts=0, kPts=0, hkPtsMap={}; 
+    let totalRoomCount = 0;
+    
+    // 三種人力的基準點數
+    const ftBasePts = Number(document.getElementById('ftPts').value) || 16;
+    const ptBasePts = Number(document.getElementById('ptPts').value) || 12;
+    const supBasePts = Number(document.getElementById('supPts').value) || 16;
+
+    const lockKOutBtn = document.getElementById('lockKOutBtn');
+    const isLockK = lockKOutBtn ? lockKOutBtn.checked : true;
+
+    Object.values(globalRoomMap).forEach(r => {
+        let curSt = r.status; 
+        let baseSt = getBaseSt(r); 
+        if(isCountable(r)) { totalRoomCount++; }
+        let countSt = (isLockK) ? baseSt : ((curSt === 'teal') ? curSt : baseSt);
+        if(['blue','blue-red'].includes(countSt)) out++;
+        if(['yellow','yellow-full'].includes(countSt)) stay++;
+        if(['red', 'blue-red', 'ooo-to-in', 'green-red'].includes(baseSt)) { inCount++; }
+        
+        let effPts = getEffPts(r);
+        if (isCountable(r)) {
+            if(curSt === 'green') { 
+                if (r.hk === '') greenPts += effPts; 
+                else { cleanPts += effPts; hkPtsMap[r.hk] = (hkPtsMap[r.hk] || 0) + effPts; } 
+            }
+            else if (curSt === 'teal') { kPts += effPts; }
+            else { 
+                cleanPts += effPts; 
+                if (r.hk) hkPtsMap[r.hk] = (hkPtsMap[r.hk] || 0) + effPts; 
+            }
+        }
+    });
+
+    // 總人力點數包含領班
+    const totalManpower = (Number(document.getElementById('ftCount').value) * ftBasePts) + 
+                          (Number(document.getElementById('ptCount').value) * ptBasePts) + 
+                          (Number(document.getElementById('supCount').value) * supBasePts);
+
+    const actualLoad = cleanPts + greenPts;
+    const originalLoad = actualLoad + kPts;
+    const needKeep = originalLoad - totalManpower;
+
+    document.getElementById('statTotalRooms').innerText = totalRoomCount;
+    document.getElementById('statOut').innerText = out;
+    document.getElementById('statStay').innerText = stay;
+    document.getElementById('statInCount').innerText = inCount;
+    document.getElementById('statLoadPts').innerText = originalLoad.toFixed(1);
+    document.getElementById('statManpowerPts').innerText = totalManpower.toFixed(1);
+    
+    let diffElement = document.getElementById('statDiffPts');
+    diffElement.innerText = `(${kPts.toFixed(1)} / ${needKeep > 0 ? needKeep.toFixed(1) : 0})`;
+    diffElement.style.color = (kPts < needKeep && needKeep > 0) ? "var(--red)" : "var(--green)";
+    
+    const hkSum = document.getElementById('hkSummary'); 
+    hkSum.innerHTML = '<div style="width:100%; font-size:13px; font-weight:bold; margin-bottom:2px; color:var(--dark);">👷 房務員負載狀態：</div>';
+    const hks = Object.keys(hkPtsMap).sort((a,b)=>a-b);
+    if (hks.length > 0) {
+        hks.forEach(k => { 
+            let pts = hkPtsMap[k];
+            // 負載條基準：這裡預設先以正職基準，若需要細分可再微調
+            let percentage = Math.min((pts / ftBasePts) * 100, 100);
+            let barColor = '#2ecc71'; 
+            if(pts > ftBasePts) barColor = '#e74c3c';
+            else if(percentage >= 80) barColor = '#f1c40f';
+            hkSum.innerHTML += `
+                <div class="hk-workload-card">
+                    <div class="hk-workload-header"><span>人員 ${k}</span><span class="hk-workload-pts">${pts.toFixed(1)} 點</span></div>
+                    <div class="hk-progress-bg"><div class="hk-progress-bar" style="width: ${percentage}%; background-color: ${barColor};"></div></div>
+                </div>`;
+        });
+    } else { hkSum.innerHTML += '<div style="font-size:12px; color:#7f8c8d; padding-left:5px;">尚未指派人員</div>'; }
+}
+
+async function exportDocx() {
+    if (typeof window.PizZip === 'undefined' || typeof window.docxtemplater === 'undefined' || typeof window.JSZip === 'undefined') {
+        return alert("系統載入 Word/ZIP 處理模組失敗，請確認網路連線。");
+    }
+    const templateFile = document.getElementById('docxTemplate').files[0];
+    if (!templateFile) return alert("請先在第 3 步驟上傳您的 Word 範本檔 (.docx)！");
+    let hkMap = {};
+    Object.values(globalRoomMap).forEach(r => { if (r.hk) { if (!hkMap[r.hk]) hkMap[r.hk] = []; hkMap[r.hk].push(r); } });
+    if (Object.keys(hkMap).length === 0) return alert("目前沒有指派任何房間給人員，無法產生報表！");
+    let zipPacker = new JSZip();
+    let folder = zipPacker.folder("房務派單總包");
+    const content = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function(e) { resolve(e.target.result); };
+        reader.readAsArrayBuffer(templateFile);
+    });
+    Object.keys(hkMap).forEach(hk => {
+        let rooms = hkMap[hk].sort(hkRoomSort);
+        let totalPts = rooms.reduce((sum, r) => isCountable(r) ? sum + getEffPts(r) : sum, 0);
+        let data = { hk: hk, hkPts: totalPts.toFixed(1) };
+        for(let i=0; i<22; i++) {
+            let n = i + 1; 
+            let r = rooms[i];
+            if(r) {
+                let st = getBaseSt(r); 
+                let isKeep = (r.status === 'green' || r.status === 'teal' || st === 'green-red' || st === 'ooo-to-in');
+                data['r'+n] = r.id; 
+                data['out'+n] = (['blue', 'blue-red'].includes(st)) ? '✔' : ''; 
+                data['stay'+n] = (['yellow', 'yellow-full'].includes(st)) ? '✔' : ''; 
+                data['pre'+n] = (['red', 'blue-red', 'ooo-to-in', 'green-red'].includes(st)) ? '✔' : ''; 
+                data['keep'+n] = isKeep ? '✔' : ''; 
+                let remarkParts = [];
+                if (st === 'yellow-full' || r.isFull) remarkParts.push('全換');
+                if (r.remark) remarkParts.push(r.remark);
+                data['m'+n] = remarkParts.join(' / ');
+            } else {
+                data['r'+n] = ''; data['out'+n] = ''; data['stay'+n] = '';
+                data['pre'+n] = ''; data['keep'+n] = ''; data['m'+n] = '';
+            }
+        }
+        try {
+            let zip = new window.PizZip(content);
+            let doc = new window.docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+            doc.render(data); 
+            let outBlob = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+            folder.file(`房務員_${hk}號_(${totalPts.toFixed(1)}點).docx`, outBlob);
+        } catch (error) { console.error("生成錯誤:", error); }
+    });
+    try {
+        const todayDate = new Date();
+        const dateStr = `${todayDate.getMonth()+1}月${todayDate.getDate()}日`;
+        let contentBlob = await zipPacker.generateAsync({type:"blob"});
+        window.saveAs(contentBlob, `房務派單總包_${dateStr}.zip`);
+        alert("打包下載完成！請到下載資料夾解壓縮。");
+    } catch(e) { alert("打包 ZIP 失敗，請確認瀏覽器支援此功能。"); }
+}
+</script>
+</body>
+</html>
