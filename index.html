@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>房務戰情分析系統 V165 - 故障房與領班版</title>
+    <title>房務戰情分析系統 V166 - 精準全換與全功能版</title>
     
     <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.37.11/build/docxtemplater.js"></script>
@@ -117,7 +117,7 @@
 <body>
 
 <div class="header-container">
-    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V165 <small style="font-size:12px;color:#8e44ad;">(故障房細化與領班版 📊)</small></h1>
+    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V166 <small style="font-size:12px;color:#8e44ad;">(精準全換與全功能版 📊)</small></h1>
     <button class="toggle-btn" onclick="toggleSetupPanel()" id="toggleBtn">隱藏設定區</button>
 </div>
 
@@ -284,13 +284,20 @@ async function analyze() {
         if(index === 0) return;
         let cols = line.split(',');
         if(cols.length <= 8) return;
+        
         let rid = normId(cols[0]);
         let arrivalStr = cleanStr(cols[7]); 
         let departStr = cleanStr(cols[8]);  
+        
         if(rid) {
             staySet.add(rid);
-            if(line.includes('全')) { fullChangeSet.add(rid); } 
-            else {
+            
+            // 【V166 核心修正】：排除姓名欄位 (索引 2) 後再檢查是否包含「全」字，避免如「李浩全」被誤判。
+            let checkLineWithoutName = cols.filter((val, idx) => idx !== 2).join(',');
+            
+            if(checkLineWithoutName.includes('全')) { 
+                fullChangeSet.add(rid); 
+            } else {
                 const arrDate = parseDateRobust(arrivalStr);
                 const depDate = parseDateRobust(departStr);
                 if(arrDate && !isNaN(arrDate.getTime())) {
@@ -326,11 +333,10 @@ async function analyze() {
             let v1 = row[3], v2 = row[4];
             let initialSt = 'gray';
 
-            // 【故障房新邏輯】
             if(isOOO(v1)) {
-                if (isOOO(v2)) initialSt = 'gray';     // 故障房連續兩天故障房標記為G
-                else if (isName(v2)) initialSt = 'ooo-to-in'; // 故障轉入住
-                else if (isBlank(v2)) initialSt = 'green';  // 故障房轉空房標記為L (程式中green對應L)
+                if (isOOO(v2)) initialSt = 'gray';     
+                else if (isName(v2)) initialSt = 'ooo-to-in'; 
+                else if (isBlank(v2)) initialSt = 'green';  
                 else initialSt = 'gray';
             }
             else if(isName(v1)) {
@@ -562,7 +568,6 @@ function updateSummary() {
     let out=0, stay=0, inCount=0, cleanPts=0, greenPts=0, kPts=0, hkPtsMap={}; 
     let totalRoomCount = 0;
     
-    // 三種人力的基準點數
     const ftBasePts = Number(document.getElementById('ftPts').value) || 16;
     const ptBasePts = Number(document.getElementById('ptPts').value) || 12;
     const supBasePts = Number(document.getElementById('supPts').value) || 16;
@@ -593,7 +598,6 @@ function updateSummary() {
         }
     });
 
-    // 總人力點數包含領班
     const totalManpower = (Number(document.getElementById('ftCount').value) * ftBasePts) + 
                           (Number(document.getElementById('ptCount').value) * ptBasePts) + 
                           (Number(document.getElementById('supCount').value) * supBasePts);
@@ -619,7 +623,6 @@ function updateSummary() {
     if (hks.length > 0) {
         hks.forEach(k => { 
             let pts = hkPtsMap[k];
-            // 負載條基準：這裡預設先以正職基準，若需要細分可再微調
             let percentage = Math.min((pts / ftBasePts) * 100, 100);
             let barColor = '#2ecc71'; 
             if(pts > ftBasePts) barColor = '#e74c3c';
