@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>房務戰情分析系統 V166 - 精準全換與全功能版</title>
+    <title>房務戰情分析系統 V168 - 終極防呆全換版</title>
     
     <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.37.11/build/docxtemplater.js"></script>
@@ -117,7 +117,7 @@
 <body>
 
 <div class="header-container">
-    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V166 <small style="font-size:12px;color:#8e44ad;">(精準全換與全功能版 📊)</small></h1>
+    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V168 <small style="font-size:12px;color:#8e44ad;">(終極防呆全換版 📊)</small></h1>
     <button class="toggle-btn" onclick="toggleSetupPanel()" id="toggleBtn">隱藏設定區</button>
 </div>
 
@@ -281,36 +281,45 @@ async function analyze() {
     const fullChangeSet = new Set();
 
     stayLines.forEach((line, index) => {
-        if(index === 0) return;
         let cols = line.split(',');
-        if(cols.length <= 8) return;
+        if(cols.length < 5) return;
         
         let rid = normId(cols[0]);
-        let arrivalStr = cleanStr(cols[7]); 
-        let departStr = cleanStr(cols[8]);  
+        if(!rid || isNaN(parseInt(rid))) return; 
+
+        staySet.add(rid);
         
-        if(rid) {
-            staySet.add(rid);
-            
-            // 【V166 核心修正】：排除姓名欄位 (索引 2) 後再檢查是否包含「全」字，避免如「李浩全」被誤判。
-            let checkLineWithoutName = cols.filter((val, idx) => idx !== 2).join(',');
-            
-            if(checkLineWithoutName.includes('全')) { 
-                fullChangeSet.add(rid); 
-            } else {
-                const arrDate = parseDateRobust(arrivalStr);
-                const depDate = parseDateRobust(departStr);
-                if(arrDate && !isNaN(arrDate.getTime())) {
-                    arrDate.setHours(0,0,0,0);
-                    const diffTime = todayDate.getTime() - arrDate.getTime();
-                    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-                    let isDepToday = false;
-                    if(depDate && !isNaN(depDate.getTime())) {
-                        depDate.setHours(0,0,0,0);
-                        isDepToday = (todayDate.getTime() === depDate.getTime());
-                    }
-                    if(diffDays > 0 && diffDays % 2 === 0 && !isDepToday) { fullChangeSet.add(rid); }
+        let dateCols = cols.filter(c => /^20\d{2}[-/]\d{1,2}[-/]\d{1,2}/.test(c.trim()));
+        let arrivalStr = dateCols.length > 0 ? dateCols[0] : '';
+        let departStr = dateCols.length > 1 ? dateCols[1] : '';
+
+        // 【V168 終極防呆】：
+        // 嚴格比對欄位內容，必須「等於」"全" 或 "全換"，或者有明確的 "(全)" 標記
+        // 不再使用寬鬆的 includes('全')，避免姓名或旅行社名稱干擾
+        let isManualFullChange = false;
+        for (let i = 1; i < cols.length; i++) {
+            let val = cleanStr(cols[i]);
+            if (val === '全' || val === '全換' || val.includes('(全)') || val.includes('（全）')) {
+                isManualFullChange = true;
+                break;
+            }
+        }
+        
+        if (isManualFullChange) { 
+            fullChangeSet.add(rid); 
+        } else {
+            const arrDate = parseDateRobust(arrivalStr);
+            const depDate = parseDateRobust(departStr);
+            if(arrDate && !isNaN(arrDate.getTime())) {
+                arrDate.setHours(0,0,0,0);
+                const diffTime = todayDate.getTime() - arrDate.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                let isDepToday = false;
+                if(depDate && !isNaN(depDate.getTime())) {
+                    depDate.setHours(0,0,0,0);
+                    isDepToday = (todayDate.getTime() === depDate.getTime());
                 }
+                if(diffDays > 0 && diffDays % 2 === 0 && !isDepToday) { fullChangeSet.add(rid); }
             }
         }
     });
