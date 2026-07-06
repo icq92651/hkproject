@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>房務戰情分析系統 V168 - 終極防呆全換版</title>
+    <title>房務戰情分析系統 V169 - 派房明細統計版</title>
     
     <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.4/dist/pizzip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.37.11/build/docxtemplater.js"></script>
@@ -117,7 +117,7 @@
 <body>
 
 <div class="header-container">
-    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V168 <small style="font-size:12px;color:#8e44ad;">(終極防呆全換版 📊)</small></h1>
+    <h1 style="margin:0; font-size:18px; color: var(--dark);">房務戰情分析系統 V169 <small style="font-size:12px;color:#8e44ad;">(派房明細統計版 📊)</small></h1>
     <button class="toggle-btn" onclick="toggleSetupPanel()" id="toggleBtn">隱藏設定區</button>
 </div>
 
@@ -213,6 +213,35 @@ let globalRoomMap = {};
 const globalFloors = [13, 12, 11, 10, 9, 8, 7, 6, 5, 3, 2];
 const ROOM_PTS = {'1303':5,'1308':3,'1209':3,'1205':3,'1301':2,'1302':2,'1305':2,'1306':2,'1307':2,'1201':2,'1202':2,'1203':2,'1206':2,'1207':2,'1208':2};
 
+// 【新增判斷】：純粹用於統計房型大小的邏輯判斷器
+function getRoomSize(rid) {
+    let num = parseInt(rid, 10);
+    let floor = Math.floor(num / 100);
+    let roomSeq = num % 100;
+
+    // 特大房
+    if (floor === 13 && roomSeq >= 1 && roomSeq <= 8) return 'XL';
+    if (floor === 12 && roomSeq >= 1 && roomSeq <= 9) return 'XL';
+    
+    // 11樓全為小房 / 806為小房
+    if (floor === 11) return 'S';
+    if (num === 806) return 'S';
+
+    // 3樓至10樓
+    if (floor >= 3 && floor <= 10) {
+        if ((roomSeq >= 7 && roomSeq <= 9) || (roomSeq >= 18 && roomSeq <= 20)) return 'S';
+        if ((roomSeq >= 1 && roomSeq <= 6) || (roomSeq >= 10 && roomSeq <= 17)) return 'L';
+    }
+
+    // 2樓 (沒有18-20，15-17為小房)
+    if (floor === 2) {
+        if ((roomSeq >= 7 && roomSeq <= 9) || (roomSeq >= 15 && roomSeq <= 17)) return 'S';
+        if ((roomSeq >= 1 && roomSeq <= 6) || (roomSeq >= 10 && roomSeq <= 14)) return 'L';
+    }
+
+    return 'S'; // 防呆預設值
+}
+
 function getPts(rid) { return ROOM_PTS[rid] || (parseInt(rid)>=1200?2.0:1.0); }
 
 function getBaseSt(r) {
@@ -293,9 +322,6 @@ async function analyze() {
         let arrivalStr = dateCols.length > 0 ? dateCols[0] : '';
         let departStr = dateCols.length > 1 ? dateCols[1] : '';
 
-        // 【V168 終極防呆】：
-        // 嚴格比對欄位內容，必須「等於」"全" 或 "全換"，或者有明確的 "(全)" 標記
-        // 不再使用寬鬆的 includes('全')，避免姓名或旅行社名稱干擾
         let isManualFullChange = false;
         for (let i = 1; i < cols.length; i++) {
             let val = cleanStr(cols[i]);
@@ -490,30 +516,57 @@ function removeHk(id) {
     renderRooms();
 }
 
+// 【升級】：派房明細總覽加入動態房型統計功能
 function showHkDetails() {
     const modal = document.getElementById('hkModal');
     const backdrop = document.getElementById('hkModalBackdrop');
     const content = document.getElementById('hkModalContent');
     let hkMap = {};
     Object.values(globalRoomMap).forEach(r => { if (r.hk) { if (!hkMap[r.hk]) hkMap[r.hk] = []; hkMap[r.hk].push(r); } });
+    
     const statusNames = { 'blue': '退房', 'yellow': '續住', 'yellow-full': '全換', 'red': '入住', 'blue-red': '退入', 'green': '留-掃', 'teal': '今留', 'gray': '空/故', 'ooo-to-in': '修轉入', 'green-red':'留轉入' };
     const statusColors = { 'blue': '#3498db', 'yellow': '#f1c40f', 'yellow-full': '#f1c40f', 'red': '#e74c3c', 'blue-red': 'linear-gradient(to bottom, #3498db 50%, #e74c3c 50%)', 'green': '#2ecc71', 'teal': '#1abc9c', 'gray': '#bdc3c7', 'ooo-to-in': 'linear-gradient(to bottom, #2ecc71 50%, #e74c3c 50%)', 'green-red':'linear-gradient(to bottom, #2ecc71 50%, #e74c3c 50%)' };
     
-    if (Object.keys(hkMap).length === 0) content.innerHTML = '<div style="text-align:center; padding: 30px;">目前沒有指派任何房間。</div>';
-    else {
+    if (Object.keys(hkMap).length === 0) {
+        content.innerHTML = '<div style="text-align:center; padding: 30px;">目前沒有指派任何房間。</div>';
+    } else {
         let html = '';
         Object.keys(hkMap).sort((a,b) => parseInt(a) - parseInt(b)).forEach(hk => {
             let rooms = hkMap[hk].sort(hkRoomSort);
+            
+            // 初始化該人員的各項統計數字
             let totalPts = rooms.reduce((sum, r) => isCountable(r) ? sum + getEffPts(r) : sum, 0);
+            let stats = { out: 0, stay: 0, XL: 0, L: 0, S: 0 };
+            
+            // 掃描人員手上的每一間房間進行累加
+            rooms.forEach(r => {
+                let baseSt = getBaseSt(r);
+                if (['blue', 'blue-red'].includes(baseSt)) stats.out++;
+                if (['yellow', 'yellow-full'].includes(baseSt)) stats.stay++;
+                
+                // 依據房號取得大小分類並累加
+                let rSize = getRoomSize(r.id);
+                stats[rSize]++;
+            });
+
+            // 將統計結果渲染到卡片標題區
             html += `<div style="margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: white;">
-                        <div style="background: #2c3e50; color: #f1c40f; padding: 10px 15px; font-weight: bold;">👷 房務員：${hk} 號 (共 ${rooms.length} 間 / ${totalPts} 點)</div>
+                        <div style="background: #2c3e50; padding: 10px 15px;">
+                            <div style="color: #f1c40f; font-weight: bold; font-size: 14px; margin-bottom: 5px;">👷 房務員：${hk} 號 (共 ${rooms.length} 間 / ${totalPts.toFixed(1)} 點)</div>
+                            <div style="color: #ecf0f1; font-size: 12px; display: flex; gap: 15px;">
+                                <span>🧹 狀態：退房 <b style="color:white;">${stats.out}</b> 間 / 續住 <b style="color:white;">${stats.stay}</b> 間</span>
+                                <span>🏠 房型：特大 <b style="color:white;">${stats.XL}</b> / 大房 <b style="color:white;">${stats.L}</b> / 小房 <b style="color:white;">${stats.S}</b></span>
+                            </div>
+                        </div>
                         <div style="padding: 10px; display: flex; flex-wrap: wrap; gap: 8px;">`;
+                        
             rooms.forEach(r => {
                 let stName = statusNames[r.status] || r.status;
                 let stBg = statusColors[r.status] || '#ccc';
                 let txtColor = (r.status.includes('yellow')) ? '#333' : 'white';
                 let remarkHTML = r.remark ? `<span style="font-size:10px; color:#e74c3c; margin-left:4px;">(${r.remark})</span>` : '';
                 let roomPtDisp = isCountable(r) ? getEffPts(r) : 0;
+                
                 html += `<div style="border: 1px solid #eee; border-radius: 6px; padding: 5px 10px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
                             <strong>${r.id}</strong>
                             <span style="display:inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight:bold; background:${stBg}; color:${txtColor};">${stName}</span>
