@@ -44,6 +44,8 @@
         .btn-print-hk { flex: 1; min-width: 120px; background: #8e44ad; color: white; border: none; padding: 10px; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; transition: 0.2s; display: none; }
         .btn-print-hk:hover { background: #732d91; }
         .btn-cmd { background: #d35400; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; white-space: nowrap; }
+        .remark-quick-btn { background: #fff; color: #d35400; border: 1px solid #d35400; padding: 3px 10px; border-radius: 12px; cursor: pointer; font-size: 12px; font-weight: bold; transition: 0.2s; }
+        .remark-quick-btn:hover { background: #d35400; color: white; }
         .btn-share { background: #8e44ad; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; white-space: nowrap; transition: 0.2s; }
 
         .dashboard { display: none; margin-top: 10px; }
@@ -154,6 +156,15 @@
                 <textarea id="cmdInput" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();executeCommands();}" placeholder="指令輸入... (例: 520~BT*1)"></textarea>
                 <button class="btn-cmd" style="height:32px;" onclick="executeCommands()">執行</button>
                 <button class="btn-share" style="height:32px;" onclick="exportState()">🔗 複製</button>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; align-items:center;">
+                <span style="font-size:11px; color:#888;">快速備註（先輸入房號，再點選插入）：</span>
+                <button type="button" class="remark-quick-btn" onclick="insertRemark('BS', true)">BS</button>
+                <button type="button" class="remark-quick-btn" onclick="insertRemark('BT', true)">BT</button>
+                <button type="button" class="remark-quick-btn" onclick="insertRemark('W', true)">W</button>
+                <button type="button" class="remark-quick-btn" onclick="insertRemark('BC', true)">BC</button>
+                <button type="button" class="remark-quick-btn" onclick="insertRemark('延遲退房')">延遲退房</button>
+                <button type="button" class="remark-quick-btn" onclick="insertRemark('換單續住')">換單續住</button>
             </div>
         </div>
     </div>
@@ -472,6 +483,22 @@ function executeCommands() {
     applyGroup(); input.value = ''; renderRooms();
 }
 
+function insertRemark(note, withCount) {
+    const input = document.getElementById('cmdInput');
+    let val = input.value;
+    if (val.trim() === '') {
+        alert('請先在指令輸入框內輸入房號（例如：520），再點選快速備註按鈕。');
+        input.focus();
+        return;
+    }
+    val = val.replace(/\s+$/, '');
+    const token = withCount ? note + '*1' : note;
+    if (val.includes('~')) { val += '/' + token; }
+    else { val += '~' + token; }
+    input.value = val + ' ';
+    input.focus();
+}
+
 function exportState() {
     if(Object.keys(globalRoomMap).length === 0) return alert("請先啟動分析！");
     let groups = {};
@@ -624,7 +651,74 @@ function renderRooms() {
     });
     printContainer.innerHTML = printHtml + '</table>';
     updateSummary();
+    saveState();
 }
+
+const AUTOSAVE_KEY = 'hkSystemState_v169';
+
+function saveState() {
+    if (Object.keys(globalRoomMap).length === 0) return;
+    try {
+        const state = {
+            globalRoomMap,
+            ft: document.getElementById('ftCount').value,
+            ftp: document.getElementById('ftPts').value,
+            pt: document.getElementById('ptCount').value,
+            ptp: document.getElementById('ptPts').value,
+            sup: document.getElementById('supCount').value,
+            supp: document.getElementById('supPts').value,
+            lockK: document.getElementById('lockKOutBtn') ? document.getElementById('lockKOutBtn').checked : true,
+            todayDateText: document.getElementById('statTodayDate').innerText,
+            printDateText: document.getElementById('printDate').innerText,
+            savedAt: new Date().toLocaleString('zh-TW')
+        };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.error('自動儲存失敗：', e);
+    }
+}
+
+function clearSavedState() {
+    localStorage.removeItem(AUTOSAVE_KEY);
+}
+
+function restoreState() {
+    let saved;
+    try {
+        saved = JSON.parse(localStorage.getItem(AUTOSAVE_KEY));
+    } catch (e) {
+        saved = null;
+    }
+    if (!saved || !saved.globalRoomMap || Object.keys(saved.globalRoomMap).length === 0) return;
+
+    const msg = `偵測到尚未列印/匯出的派房紀錄（儲存於：${saved.savedAt || '未知時間'}）。\n\n要繼續上次的紀錄嗎？\n（選「取消」會清除該紀錄，從頭開始）`;
+    if (!confirm(msg)) {
+        clearSavedState();
+        return;
+    }
+
+    globalRoomMap = saved.globalRoomMap;
+    document.getElementById('ftCount').value = saved.ft ?? 0;
+    document.getElementById('ftPts').value = saved.ftp ?? 16;
+    document.getElementById('ptCount').value = saved.pt ?? 0;
+    document.getElementById('ptPts').value = saved.ptp ?? 12;
+    document.getElementById('supCount').value = saved.sup ?? 0;
+    document.getElementById('supPts').value = saved.supp ?? 16;
+    if (document.getElementById('lockKOutBtn')) {
+        document.getElementById('lockKOutBtn').checked = saved.lockK !== undefined ? saved.lockK : true;
+    }
+    if (saved.todayDateText) document.getElementById('statTodayDate').innerText = saved.todayDateText;
+    if (saved.printDateText) document.getElementById('printDate').innerText = saved.printDateText;
+
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('printBtn').style.display = 'block';
+    document.getElementById('btnDetail').style.display = 'block';
+    document.getElementById('printHkBtn').style.display = 'block';
+
+    renderRooms();
+}
+
+window.addEventListener('load', restoreState);
 
 function updateSummary() {
     let out=0, stay=0, inCount=0, cleanPts=0, greenPts=0, kPts=0, hkPtsMap={}; 
